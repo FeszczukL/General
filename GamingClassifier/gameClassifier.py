@@ -5,32 +5,32 @@ from datasets import Dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 # Load the CSV
-df = pd.read_csv("reddit_gaming_dataset.csv")
+df = pd.read_csv("reddit_gaming_sample_labeled.csv")
 
 # Convert to Hugging Face Dataset format
 dataset = Dataset.from_pandas(df)
 dataset = dataset.rename_column("Comment", "text")
-dataset = dataset.rename_column("sentiment", "label")
+dataset = dataset.rename_column("gaming_related", "label")
 
-label_mapping = {
-    "negative": 0,
-    "neutral": 1,
-    "positive": 2
-}
-def preprocess_labels(data_set):
-    # Convert the string label to its corresponding integer
-    data_set["label"] = label_mapping[data_set["label"]]
-    return data_set
+# label_mapping = {
+#     "negative": 0,
+#     "neutral": 1,
+#     "positive": 2
+# }
+# def preprocess_labels(data_set):
+#     # Convert the string label to its corresponding integer
+#     data_set["label"] = label_mapping[data_set["label"]]
+#     return data_set
 
 # Apply the transformation
-dataset = dataset.map(preprocess_labels)
+# dataset = dataset.map(preprocess_labels)
 dataset = dataset.train_test_split(test_size=0.2)  # Split into train/test
 
 
 
 model_name = "bert-base-uncased"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=3)  # 2 labels: gaming-related or not //////!!!!! this mismatches the labels
+model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)  # 2 labels: gaming-related or not //////!!!!! this mismatches the labels
 
 def tokenize(batch):
     return tokenizer(batch["text"], padding="max_length", truncation=True)
@@ -60,3 +60,20 @@ trainer = Trainer(
 )
 
 trainer.train()
+
+metrics = trainer.evaluate()
+print(metrics)
+
+from sklearn.metrics import classification_report
+
+predictions = trainer.predict(tokenized_dataset["test"])
+preds = predictions.predictions.argmax(-1)
+labels = predictions.label_ids
+
+print(classification_report(labels, preds))
+
+text = "Do you have any recommendations for RPG games?"
+inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
+outputs = model(**inputs)
+prediction = outputs.logits.argmax(dim=-1)
+print("Gaming-related" if prediction == 1 else "Not gaming-related")
